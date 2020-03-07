@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "outDir": "src/js",
+    "module": "commonjs",
+    "target": "es6",
+    "esModuleInterop": true
+  },
+  "include": ["src/app"]
+}

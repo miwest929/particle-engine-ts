@@ -1,0 +1,31 @@
+{
+  "name": "particle-engine-ts",
+  "version": "0.0.1",
+  "description": "A WebGL-based particle effects engine written in TypeScript",
+  "author": "Michael West",
+  "keywords": [
+    "typescript",
+    "particle",
+    "engine",
+    "webgl"
+  ],
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "bin": "./dist/assurance.js",
+  "files": [
+    "dist/**/*",
+    "!dist/**/*.test.js"
+  ],
+  "scripts": {
+    "dev": "ts-node ./src/assurance.ts --path example-project",
+    "build": "npm run clean && tsc",
+    "test": "npm run build && ava --verbose",
+    "bundle": "npm run build && pkg . --out-dir ./exec/"
+  },
+  "devDependencies": {
+    "ts-node": "^8.7.0",
+    "typescript": "^3.8.3",
+    "@types/node": "^13.9.0"
+  },
+  "dependencies": {}
+}
