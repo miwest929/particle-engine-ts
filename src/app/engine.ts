@@ -35,18 +35,19 @@ class Vector {
 
 class Particle {
     private STARTING_AGE: number = 256;
-    private DECAY_RATE: number = 2;
 
     private location: Vector;
     private velocity: Vector;
     private acceleration: Vector;
+    private decayRate: number; // how quickly this particle will age
     private lifespan: number = this.STARTING_AGE;
     private color: string; // rgb string
 
-    constructor(initialLocation: Vector, acceleration: Vector, velocity: Vector, color: string) {
+    constructor(initialLocation: Vector, acceleration: Vector, velocity: Vector, color: string, decayRate: number) {
         this.location = initialLocation.clone();
         this.velocity = velocity;
         this.acceleration = acceleration;
+        this.decayRate = decayRate;
         this.color = color;
     }
 
@@ -54,7 +55,7 @@ class Particle {
         if (!this.isDead()) {
             this.velocity = this.velocity.add(this.acceleration);
             this.location = this.location.add(this.velocity);
-            this.lifespan -= this.DECAY_RATE;
+            this.lifespan -= this.decayRate;
         }
     }
 
@@ -81,12 +82,14 @@ class Particle {
 
 type PVectorAttrEmitFn = (seq: number) => Vector;
 type PStringAttrEmitFn = (seq: number) => string;
+type PNumberAttrEmitFn = (seq: number) => number;
 class ParticleEmitter {
   public baseLocation: Vector;
 
   private velocityEmitter: PVectorAttrEmitFn;
   private locationEmitter: PVectorAttrEmitFn;
   private accelerationEmitter: PVectorAttrEmitFn;
+  private decayRateEmitter: PNumberAttrEmitFn;
   private colorEmitter: PStringAttrEmitFn;
 
   constructor(baseLocation: Vector) {
@@ -105,6 +108,10 @@ class ParticleEmitter {
     this.locationEmitter = emitter;
   }
 
+  public setDecayRateEmitter(emitter: PNumberAttrEmitFn) {
+    this.decayRateEmitter = emitter;
+  }
+
   public setAccelerationEmitter(emitter: PVectorAttrEmitFn) {
     this.accelerationEmitter = emitter;
   }
@@ -118,7 +125,8 @@ class ParticleEmitter {
         this.locationEmitter(seq),
         this.accelerationEmitter(seq),
         this.velocityEmitter(seq),
-        this.colorEmitter(seq)
+        this.colorEmitter(seq),
+        this.decayRateEmitter(seq)
       );
   }
 }
@@ -135,6 +143,9 @@ GravityParticleEmitter.setColorEmitter((_seq: number): string => {
     const color = ["rgb(255,127,80)", "rgb(255,99,71)", "rgb(255,140,0)", "rgb(255,165,0)"].sample();
     return color;
 });
+GravityParticleEmitter.setDecayRateEmitter((_seq: number): number => {
+  return [1, 2, 3, 4, 5].sample();
+});
 
 interface ParticleEngineOptions {
     targetParticleCount: number;
@@ -150,12 +161,15 @@ class ParticleEngine {
         this.emitter = options.emitter;
         this.targetParticleCount = options.targetParticleCount;
 
-        this.createParticles();
+        this.particles = [];
+        this.createParticles(this.targetParticleCount);
     }
 
     public update = () => {
         // cull all dead particles
         this.particles = this.particles.filter((p) => !p.isDead());
+        //console.log(`need-to-create-cnt = ${this.targetParticleCount - this.particles.length}`);
+        this.createParticles(this.targetParticleCount - this.particles.length);
 
         for (const p of this.particles) {
             p.update();
@@ -168,20 +182,20 @@ class ParticleEngine {
         }
     }
 
-    private createParticles() {
-        this.particles = [];
-        for (let i = 0; i < this.targetParticleCount; i++) {
-            this.particles.push(this.createRandomParticle());
+    private createParticles(createCount: number) {
+        for (let i = 0; i < createCount; i++) {
+            this.createRandomParticle();
         }
     }
 
     private createRandomParticle() {
-        return this.emitter.emitParticle(0);
+        const particle = this.emitter.emitParticle(0);
+        this.particles.push(particle);
     }
 }
 
 const engine: ParticleEngine = new ParticleEngine({
-    targetParticleCount: 2000,
+    targetParticleCount: 1000,
     emitter: GravityParticleEmitter
 });
 
