@@ -1,6 +1,15 @@
 let canvas:HTMLCanvasElement = document.getElementById('canvas') as HTMLCanvasElement;
 let ctx:CanvasRenderingContext2D = canvas.getContext('2d');
 
+interface Array<T> {
+    sample(): T;
+}
+
+Array.prototype.sample = function () {
+  const randIdx = Math.floor(Math.random() * this.length);
+  return this[randIdx];
+};
+
 // Note: https://stackoverflow.com/a/55906256
 class Vector {
     public readonly x: number;
@@ -32,11 +41,13 @@ class Particle {
     private velocity: Vector;
     private acceleration: Vector;
     private lifespan: number = this.STARTING_AGE;
+    private color: string; // rgb string
 
-    constructor(initialLocation: Vector, acceleration: Vector) {
+    constructor(initialLocation: Vector, acceleration: Vector, velocity: Vector, color: string) {
         this.location = initialLocation.clone();
-        this.velocity = Vector.empty();
+        this.velocity = velocity;
         this.acceleration = acceleration;
+        this.color = color;
     }
 
     public update = () => {
@@ -49,33 +60,103 @@ class Particle {
 
     public render = (ctx: CanvasRenderingContext2D) => {
         if (!this.isDead()) {
-            ctx.fillStyle = 'white';
+            ctx.globalAlpha = this.computeAlphaValue();
+            ctx.fillStyle = this.color;
+            //rgb(89, 89, 89)
             ctx.beginPath();
             // x, y, radiusX, radiusY, rotation, startAngle, endAngle [, anticlockwise]
-            ctx.ellipse(this.location.x, this.location.y, 3, 3, Math.PI * .25, 0, Math.PI * 1.5);
+            ctx.arc(this.location.x, this.location.y, 3, 0, 2 * Math.PI, false);
             ctx.fill();
         }
     }
 
     public isDead = () => {
-        return this.lifespan <= 0;
+        return this.lifespan < 0;
+    }
+
+    private computeAlphaValue = (): number => {
+        return this.lifespan / this.STARTING_AGE;
     }
 }
 
-interface ParticleEngineOptions {
-    particleCount: number;
-    baseLocation: Vector;
+type PVectorAttrEmitFn = (seq: number) => Vector;
+type PStringAttrEmitFn = (seq: number) => string;
+class ParticleEmitter {
+  public baseLocation: Vector;
+
+  private velocityEmitter: PVectorAttrEmitFn;
+  private locationEmitter: PVectorAttrEmitFn;
+  private accelerationEmitter: PVectorAttrEmitFn;
+  private colorEmitter: PStringAttrEmitFn;
+
+  constructor(baseLocation: Vector) {
+    this.baseLocation = baseLocation;
+    this.velocityEmitter = this.accelerationEmitter = this.colorEmitter = null;
+
+    // By default the particle starts at the base location of its emitter
+    this.locationEmitter = (_sec: number) => { return this.baseLocation.clone(); };
+  }
+
+  public setVelocityEmitter(emitter: PVectorAttrEmitFn) {
+    this.velocityEmitter = emitter;
+  }
+
+  public setLocationEmitter(emitter: PVectorAttrEmitFn) {
+    this.locationEmitter = emitter;
+  }
+
+  public setAccelerationEmitter(emitter: PVectorAttrEmitFn) {
+    this.accelerationEmitter = emitter;
+  }
+
+  public setColorEmitter(emitter: PStringAttrEmitFn) {
+    this.colorEmitter = emitter;
+  }
+
+  public emitParticle(seq: number): Particle {
+      return new Particle(
+        this.locationEmitter(seq),
+        this.accelerationEmitter(seq),
+        this.velocityEmitter(seq),
+        this.colorEmitter(seq)
+      );
+  }
 }
+
+const GravityParticleEmitter = new ParticleEmitter(new Vector(canvas.width / 2, 20));
+GravityParticleEmitter.setVelocityEmitter((seq: number): Vector => {
+    const a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].sample();
+    const x = Math.random() * 6 - 3;
+    const y = a * Math.pow(x, 2);
+    return new Vector(x, y);
+});
+GravityParticleEmitter.setAccelerationEmitter((_seq: number): Vector => { return new Vector(0.0, 0.0); });
+GravityParticleEmitter.setColorEmitter((_seq: number): string => {
+    const color = ["rgb(255,127,80)", "rgb(255,99,71)", "rgb(255,140,0)", "rgb(255,165,0)"].sample();
+    return color;
+});
+
+interface ParticleEngineOptions {
+    targetParticleCount: number;
+    emitter: ParticleEmitter;
+}
+
 class ParticleEngine {
+    private emitter: ParticleEmitter;
     private particles: Particle[];
-    private baseLocation: Vector;
+    private targetParticleCount: number;
 
     constructor(options: ParticleEngineOptions) {
-        this.baseLocation = options.baseLocation;
-        this.createParticles(options.particleCount);
+        this.emitter = options.emitter;
+        this.targetParticleCount = options.targetParticleCount;
+
+        this.createParticles();
     }
 
     public update = () => {
+        // cull all dead particles
+        this.particles = this.particles.filter((p) => !p.isDead());
+
         for (const p of this.particles) {
             p.update();
         }
@@ -87,34 +168,21 @@ class ParticleEngine {
         }
     }
 
-    private createParticles(particleCnt: number) {
+    private createParticles() {
         this.particles = [];
-        for (let i = 0; i < particleCnt; i++) {
+        for (let i = 0; i < this.targetParticleCount; i++) {
             this.particles.push(this.createRandomParticle());
         }
     }
 
     private createRandomParticle() {
-      const randomIntialLocation: Vector = new Vector(
-        this.baseLocation.x + (10 * Math.random() - 5), // random offset between -5 and 5
-        this.baseLocation.y + (10 * Math.random() - 5) // random offset between -5 and 5
-      );
-
-      const randomAcceleration: Vector = new Vector(
-        Math.random() / 50,
-        Math.random() / 50,
-      );
-
-      return new Particle(
-        randomIntialLocation, // initial location
-        randomAcceleration // acceleration
-      );
+        return this.emitter.emitParticle(0);
     }
 }
 
 const engine: ParticleEngine = new ParticleEngine({
-    particleCount: 20,
-    baseLocation: new Vector(100, 150)
+    targetParticleCount: 2000,
+    emitter: GravityParticleEmitter
 });
 
 function render(ctx: CanvasRenderingContext2D) {
@@ -125,8 +193,8 @@ function render(ctx: CanvasRenderingContext2D) {
 }
 
 function gameLoop() {
-    engine.update();
     render(ctx);
+    engine.update();
     window.requestAnimationFrame(gameLoop);
 }
 
